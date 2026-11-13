@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作／休息計時器 - 地鳴版</title>
+    <style>
+        /* 基礎樣式設定 */
+        :root {
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --work-color: #ef4444;
+            --rest-color: #10b981;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --error-color: #dc2626;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* 卡片容器 */
+        .timer-card {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 480px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            padding: 32px 24px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 24px;
+            color: var(--text-main);
+        }
+
+        /* 輸入控制區劃分 */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: span 2;
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background-color: #fff;
+        }
+
+        input[type="number"]:focus, select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        /* 錯誤提示文字 */
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.8rem;
+            margin-top: 4px;
+            min-height: 1.2em;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* 狀態顯示區 */
+        .display-section {
+            margin: 24px 0;
+            padding: 20px;
+            border-radius: 12px;
+            background-color: #f9fafb;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.3s ease;
+        }
+
+        .phase-badge {
+            display: inline-block;
+            padding: 4px 16px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+            color: white;
+            background-color: var(--work-color);
+        }
+
+        .phase-badge.rest {
+            background-color: var(--rest-color);
+        }
+
+        .timer-countdown {
+            font-size: 4rem;
+            font-weight: 800;
+            font-family: monospace;
+            letter-spacing: 2px;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        /* 控制按鈕區 */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 12px 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-start {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-start:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-pause {
+            background-color: #f59e0b;
+            color: white;
+        }
+
+        .btn-pause:hover {
+            background-color: #d97706;
+        }
+
+        .btn-reset {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background-color: #4b5563;
+        }
+
+        /* ==========================================
+           進擊的巨人：地鳴發動全螢幕警告特化樣式
+           ========================================== */
+        .rumbling-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(10, 5, 5, 0.95);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
+            color: #ff3333;
+            text-align: center;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .rumbling-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+            animation: screenShake 0.15s infinite alternate;
+        }
+
+        /* 背景火光與煙霧視覺效果 */
+        .rumbling-overlay::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 68, 0, 0.45) 0%, rgba(180, 20, 0, 0.3) 40%, rgba(10, 3, 3, 0.98) 80%);
+            animation: pulseBg 1.5s infinite alternate;
+            z-index: -3;
+        }
+
+        /* 始祖巨人（Eren Founder Titan）中央龐大肋骨與懸浮剪影 */
+        .founder-titan-bg {
+            position: absolute;
+            top: 2%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90vw;
+            max-width: 800px;
+            height: 55vh;
+            opacity: 0.35;
+            z-index: -2;
+            pointer-events: none;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" preserveAspectRatio="xMidYMin meet"><g fill="%23ff3300" opacity="0.85"><!-- 頭部與垂髮 --><path d="M290,90 Q300,70 310,90 Q320,130 315,220 Q300,240 285,220 Q280,130 290,90 Z"/><circle cx="300" cy="80" r="12" fill="%23ffff99"/><g fill="%23ff1a00"><!-- 吊架骨骼結構 --><path d="M300,20 L180,110 L300,70 L420,110 Z"/><path d="M300,20 L300,70"/><path d="M180,110 L250,150 L300,160 L350,150 L420,110"/><path d="M180,110 L200,220 M420,110 L400,220"/></g><!-- 龐大肋骨巨弓 --><path d="M300,160 Q150,130 50,300 Q150,260 300,220 Q450,260 550,300 Q450,130 300,160 Z" fill="%23ff2200"/><path d="M300,200 Q120,190 20,380 Q130,340 300,280 Q470,340 580,380 Q480,190 300,200 Z" fill="%23cc1100"/><path d="M300,240 Q100,250 0,480 Q120,420 300,340 Q480,420 600,480 Q500,250 300,240 Z" fill="%23aa0000"/><path d="M295,160 L295,500 L305,500 L305,160 Z" fill="%23ff4400"/></g></svg>');
+            background-repeat: no-repeat;
+            background-position: top center;
+            background-size: contain;
+            filter: drop-shadow(0 0 15px #ff2200);
+            animation: founderPulse 3s ease-in-out infinite alternate;
+        }
+
+        /* 城牆巨人行進動畫背景 (還原參考圖中肌肉比例與隊伍) */
+        .giants-march-bg {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 200%;
+            height: 50vh;
+            opacity: 0.45;
+            z-index: -1;
+            /* 多個超大型巨人剪影排列 */
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="none"><g fill="%23ff2200"><!-- 巨人1 --><g transform="translate(40,20)"><ellipse cx="60" cy="50" rx="8" ry="10" fill="%23ffaa00"/><path d="M30,70 Q60,55 90,70 L105,150 Q90,160 85,240 L95,400 L65,400 L60,250 L55,400 L25,400 L35,240 Q30,160 15,150 Z"/><path d="M15,150 Q5,210 10,260 L22,260 Q18,200 30,150 Z"/><path d="M105,150 Q115,210 110,260 L98,260 Q102,200 90,150 Z"/></g><!-- 巨人2 (中央靠前) --><g transform="translate(220,0)"><ellipse cx="70" cy="45" rx="9" ry="11" fill="%23ffaa00"/><path d="M35,65 Q70,48 105,65 L120,150 Q105,165 100,250 L112,400 L80,400 L70,260 L60,400 L28,400 L40,250 Q35,165 20,150 Z"/><path d="M20,150 Q8,215 14,270 L28,270 Q22,205 35,150 Z"/><path d="M120,150 Q132,215 126,270 L112,270 Q118,205 105,150 Z"/></g><!-- 巨人3 --><g transform="translate(420,25)"><ellipse cx="60" cy="50" rx="8" ry="10" fill="%23ffaa00"/><path d="M30,70 Q60,55 90,70 L105,150 Q90,160 85,240 L95,400 L65,400 L60,250 L55,400 L25,400 L35,240 Q30,160 15,150 Z"/><path d="M15,150 Q5,210 10,260 L22,260 Q18,200 30,150 Z"/><path d="M105,150 Q115,210 110,260 L98,260 Q102,200 90,150 Z"/></g><!-- 巨人4 --><g transform="translate(620,5)"><ellipse cx="70" cy="45" rx="9" ry="11" fill="%23ffaa00"/><path d="M35,65 Q70,48 105,65 L120,150 Q105,165 100,250 L112,400 L80,400 L70,260 L60,400 L28,400 L40,250 Q35,165 20,150 Z"/><path d="M20,150 Q8,215 14,270 L28,270 Q22,205 35,150 Z"/><path d="M120,150 Q132,215 126,270 L112,270 Q118,205 105,150 Z"/></g><!-- 巨人5 --><g transform="translate(820,20)"><ellipse cx="60" cy="50" rx="8" ry="10" fill="%23ffaa00"/><path d="M30,70 Q60,55 90,70 L105,150 Q90,160 85,240 L95,400 L65,400 L60,250 L55,400 L25,400 L35,240 Q30,160 15,150 Z"/><path d="M15,150 Q5,210 10,260 L22,260 Q18,200 30,150 Z"/><path d="M105,150 Q115,210 110,260 L98,260 Q102,200 90,150 Z"/></g><!-- 巨人6 --><g transform="translate(1020,10)"><ellipse cx="65" cy="48" rx="8.5" ry="10.5" fill="%23ffaa00"/><path d="M32,67 Q65,51 98,67 L112,150 Q98,162 92,245 L103,400 L72,400 L65,255 L57,400 L26,400 L37,245 Q32,162 17,150 Z"/><path d="M17,150 Q6,212 11,265 L24,265 Q19,202 32,150 Z"/><path d="M112,150 Q123,212 118,265 L105,265 Q110,202 98,150 Z"/></g></g></svg>');
+            background-repeat: repeat-x;
+            background-size: 600px 100%;
+            animation: giantsMarch 10s linear infinite, giantStepBob 0.5s ease-in-out infinite alternate;
+        }
+
+        .rumbling-title {
+            font-size: 3.8rem;
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-shadow: 0 0 20px #ff0000, 0 0 40px #8b0000;
+            margin-bottom: 10px;
+            color: #ffffff;
+            animation: glitchText 0.3s infinite;
+        }
+
+        .rumbling-subtitle {
+            font-size: 2rem;
+            color: #ff4d4d;
+            letter-spacing: 4px;
+            margin-bottom: 24px;
+            font-weight: 800;
+            text-shadow: 0 0 10px #ff0000;
+        }
+
+        .rumbling-desc {
+            max-width: 650px;
+            font-size: 1.15rem;
+            line-height: 1.8;
+            color: #e5e7eb;
+            margin: 0 20px 32px 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border: 2px solid #ff3333;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
+        }
+
+        .close-rumbling-btn {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            border: 2px solid #ff8888;
+            padding: 14px 36px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(220, 38, 38, 0.8);
+            transition: all 0.2s ease;
+        }
+
+        .close-rumbling-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 1);
+        }
+
+        /* 地震與文字閃爍動畫 */
+        @keyframes screenShake {
+            0% { transform: translate(2px, 2px) rotate(0deg); }
+            20% { transform: translate(-3px, 0px) rotate(-0.5deg); }
+            40% { transform: translate(1px, -2px) rotate(0.5deg); }
+            60% { transform: translate(-2px, 1px) rotate(0deg); }
+            80% { transform: translate(3px, 2px) rotate(0.5deg); }
+            100% { transform: translate(1px, -2px) rotate(-0.5deg); }
+        }
+
+        @keyframes pulseBg {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes founderPulse {
+            0% { transform: translateX(-50%) scale(0.98); opacity: 0.3; }
+            100% { transform: translateX(-50%) scale(1.03); opacity: 0.45; }
+        }
+
+        /* 巨人橫向持續行進與上下踏步動畫 */
+        @keyframes giantsMarch {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-600px); }
+        }
+
+        @keyframes giantStepBob {
+            0% { translateY: 0px; }
+            100% { translateY: -12px; }
+        }
+
+        @keyframes glitchText {
+            0% { text-shadow: 2px 0 #ff0000, -2px 0 #00ffff; }
+            50% { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
+            100% { text-shadow: 2px 0 #ff0000, -2px 0 #00ffff; }
+        }
+
+        @media (max-width: 640px) {
+            .rumbling-title { font-size: 2.5rem; }
+            .rumbling-subtitle { font-size: 1.3rem; }
+            .rumbling-desc { font-size: 0.95rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="timer-card">
+        <h1>工作／休息計時器</h1>
+
+        <!-- 時間與階段設定表單 -->
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="workInput">工作時間 (分鐘)</label>
+                <input type="number" id="workInput" value="25" min="1" max="180" step="1">
+                <div id="workError" class="error-message">請輸入 1 到 180 的整數</div>
+            </div>
+
+            <div class="form-group">
+                <label for="restInput">休息時間 (分鐘)</label>
+                <input type="number" id="restInput" value="5" min="1" max="180" step="1">
+                <div id="restError" class="error-message">請輸入 1 到 180 的整數</div>
+            </div>
+
+            <div class="form-group full-width">
+                <label for="phaseSelect">目前階段</label>
+                <select id="phaseSelect">
+                    <option value="work">工作</option>
+                    <option value="rest">休息</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 倒數計時與狀態顯示 -->
+        <div class="display-section">
+            <div id="phaseBadge" class="phase-badge">工作階段</div>
+            <div id="timerDisplay" class="timer-countdown">25:00</div>
+        </div>
+
+        <!-- 按鈕操作區 -->
+        <div class="controls-grid">
+            <button id="startBtn" class="btn btn-start">開始</button>
+            <button id="pauseBtn" class="btn btn-pause">暫停</button>
+            <button id="resetBtn" class="btn btn-reset">重設</button>
+        </div>
+    </div>
+
+    <!-- 進擊的巨人：地鳴發動警告全螢幕圖層 -->
+    <div id="rumblingOverlay" class="rumbling-overlay">
+        <!-- 始祖巨人懸吊骨骼背景圖層 -->
+        <div class="founder-titan-bg"></div>
+        <!-- 城牆巨人行進動態背景圖層 -->
+        <div class="giants-march-bg"></div>
+
+        <div class="rumbling-title">警告・地鳴發動</div>
+        <div class="rumbling-subtitle">【 牆壁內的所有巨人，開始行進 】</div>
+        <div class="rumbling-desc">
+            致全帕拉迪島的子民們：<br>
+            艾倫·葉卡正透過始祖巨人的力量向你們宣告。<br>
+            <strong>你已經專注工作累積滿 <span id="rumblingMinutes">1</span> 分鐘！</strong><br>
+            這世上所有未專注的事物都將被踏平！繼續維持高強度專注！
+        </div>
+        <button id="closeRumblingBtn" class="close-rumbling-btn">獻出你的心臟！(關閉)</button>
+    </div>
+
+    <script>
+        // DOM 元素取得
+        const workInput = document.getElementById('workInput');
+        const restInput = document.getElementById('restInput');
+        const workError = document.getElementById('workError');
+        const restError = document.getElementById('restError');
+        const phaseSelect = document.getElementById('phaseSelect');
+        const phaseBadge = document.getElementById('phaseBadge');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // 地鳴特效 DOM 元素
+        const rumblingOverlay = document.getElementById('rumblingOverlay');
+        const rumblingMinutes = document.getElementById('rumblingMinutes');
+        const closeRumblingBtn = document.getElementById('closeRumblingBtn');
+
+        // 狀態變數
+        let timerId = null;            // 存放 setInterval 識別碼
+        let remainingSeconds = 0;      // 剩餘秒數
+        let isRunning = false;          // 計時器是否正在運行
+        let isPaused = false;           // 是否處於暫停狀態
+        let elapsedWorkSeconds = 0;    // 本次工作階段已累積運作的秒數
+
+        /**
+         * 驗證輸入分鐘值是否符合 1~180 的整數
+         */
+        function validateInput(inputEl, errorEl) {
+            const rawValue = inputEl.value.trim();
+            const val = Number(rawValue);
+
+            if (rawValue === '' || isNaN(val) || !Number.isInteger(val) || val < 1 || val > 180) {
+                errorEl.classList.add('active');
+                return null;
+            } else {
+                errorEl.classList.remove('active');
+                return val;
+            }
+        }
+
+        /**
+         * 格式化秒數為 MM:SS 格式
+         */
+        function formatTime(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        /**
+         * 畫面更新：更新剩餘時間與階段標籤文字
+         */
+        function updateDisplay() {
+            timerDisplay.textContent = formatTime(remainingSeconds);
+            
+            if (phaseSelect.value === 'work') {
+                phaseBadge.textContent = '工作階段';
+                phaseBadge.className = 'phase-badge';
+            } else {
+                phaseBadge.textContent = '休息階段';
+                phaseBadge.className = 'phase-badge rest';
+            }
+        }
+
+        /**
+         * 觸發「地鳴發動」畫面
+         */
+        function triggerRumbling(minutesCount) {
+            rumblingMinutes.textContent = minutesCount;
+            rumblingOverlay.classList.add('active');
+        }
+
+        /**
+         * 關閉「地鳴發動」畫面
+         */
+        function dismissRumbling() {
+            rumblingOverlay.classList.remove('active');
+        }
+
+        closeRumblingBtn.addEventListener('click', dismissRumbling);
+
+        /**
+         * 取得目前選擇階段的設定分鐘數並進行驗證
+         */
+        function getSelectedPhaseMinutes() {
+            const isWork = phaseSelect.value === 'work';
+            const inputEl = isWork ? workInput : restInput;
+            const errorEl = isWork ? workError : restError;
+            return validateInput(inputEl, errorEl);
+        }
+
+        /**
+         * 重設計時器到初始階段時間 (停止狀態)
+         */
+        function resetTimer() {
+            if (timerId !== null) {
+                clearInterval(timerId);
+                timerId = null;
+            }
+            isRunning = false;
+            isPaused = false;
+            elapsedWorkSeconds = 0; // 重置累積工作時間
+
+            const minutes = getSelectedPhaseMinutes();
+            if (minutes !== null) {
+                remainingSeconds = minutes * 60;
+                updateDisplay();
+            }
+            dismissRumbling();
+        }
+
+        /**
+         * 開始倒數計時
+         */
+        function startTimer() {
+            if (isRunning) return;
+
+            const workVal = validateInput(workInput, workError);
+            const restVal = validateInput(restInput, restError);
+
+            if (workVal === null || restVal === null) {
+                return;
+            }
+
+            if (!isPaused && remainingSeconds <= 0) {
+                const currentMinutes = phaseSelect.value === 'work' ? workVal : restVal;
+                remainingSeconds = currentMinutes * 60;
+                elapsedWorkSeconds = 0;
+            }
+
+            isRunning = true;
+            isPaused = false;
+
+            timerId = setInterval(() => {
+                if (remainingSeconds > 0) {
+                    remainingSeconds--;
+                    
+                    // 若在工作階段，計算並紀錄已經過的工作秒數
+                    if (phaseSelect.value === 'work') {
+                        elapsedWorkSeconds++;
+                        // 每累積滿 60 秒（1 分鐘），觸發地鳴警告畫面
+                        if (elapsedWorkSeconds > 0 && elapsedWorkSeconds % 60 === 0) {
+                            triggerRumbling(elapsedWorkSeconds / 60);
+                        }
+                    }
+
+                    updateDisplay();
+                }
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerId);
+                    timerId = null;
+                    isRunning = false;
+                    isPaused = false;
+                    remainingSeconds = 0;
+                    updateDisplay();
+                }
+            }, 1000);
+        }
+
+        /**
+         * 暫停倒數計時
+         */
+        function pauseTimer() {
+            if (!isRunning) return;
+
+            clearInterval(timerId);
+            timerId = null;
+            isRunning = false;
+            isPaused = true;
+        }
+
+        // 綁定按鈕事件
+        startBtn.addEventListener('click', startTimer);
+        pauseBtn.addEventListener('click', pauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+
+        function handleInputChange() {
+            if (!isRunning && !isPaused) {
+                resetTimer();
+            } else {
+                validateInput(workInput, workError);
+                validateInput(restInput, restError);
+            }
+        }
+
+        workInput.addEventListener('input', handleInputChange);
+        restInput.addEventListener('input', handleInputChange);
+        phaseSelect.addEventListener('change', () => {
+            resetTimer();
+        });
+
+        // 初始化
+        resetTimer();
+    </script>
+</body>
+</html>
